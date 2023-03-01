@@ -14,7 +14,7 @@
 
 //__________________________________________________________________DEBUGGING
 // #define DbgWAV
-// #define DbgTIMELINE
+#define DbgTIMELINE
 //#define DbgPULSEFADE
 //#define DbgGYRO
 //#define DbgTARGETS
@@ -46,11 +46,11 @@ AudioConnection       parchCord3(mixerLeft, 0, out, 0);
 AudioConnection       parchCord4(mixerRight, 0, out, 1);
 const int VOL_PIN = 15;
 float vol = 0;
-float adriftVol = 0.4;
-float fmVol = 0.02;
-float kickVol = 0.025;
-float bassVol = 0.07;
-float wavVol = 0.5;
+float adriftVol = 0.7;
+float fmVol = 0.07;
+float kickVol = 0.09;
+float bassVol = 0.14;
+float wavVol = 0.1;
 int pitIter=0;
 int pitchSet[8];
 int fmEuclid[2];
@@ -61,7 +61,7 @@ int fmEuclid[2];
 #define SDCARD_SCK_PIN   14
 int wavPlaying = 0;
 int wavBroken = 0;
-float pos=0;
+// float wavPos=0;
 float section=0;
 
 //__________________________________________________________________GYRO SETUP
@@ -94,9 +94,10 @@ void setupGyro(){
 //__________________________________________________________________GAME LOGIC
 long timeline = 0;
 int state = 0;
-int introEnd = 1000;
-int collectEnd = 90000;
-int cruiseEnd =  180000;
+int introEnd = 50000;
+int collectEnd = 180000;
+int cruiseEnd =  290000;
+int outroEnd = 335000;
 int target = -1;
 
 
@@ -122,7 +123,8 @@ void setup() {
   AudioMemory(20);
   audioShield.enable();
   mixerLeft.gain(0, 0.35);
-  mixerRight.gain(0, 1); 
+  mixerRight.gain(0, 1);
+  mixerRight.gain(1, 0); 
   synth.setParamValue("adriftVol",0.4);
   synth.setParamValue("masterVol", 0);
   delay(1000);
@@ -145,7 +147,7 @@ void loop() {
   if(wavBroken==0){
     playAudio("EXP4.WAV");  // filenames are always uppercase 8.3 format  
   } else {
-    Serial.println("WavBroken!");
+    // Serial.println("WavBroken!");
     readGyro();
     readVol();
     setTimeline();
@@ -160,7 +162,6 @@ void playAudio(const char *filename)
   Serial.print("Playing file: ");
   Serial.println(filename);
   #endif 
-  
   /*Start playing the file. This sketch continues to run while the file plays.*/
   playWav1.play(filename);
   /* A brief delay for the library read WAV info */
@@ -168,7 +169,7 @@ void playAudio(const char *filename)
   /* Wait for the file to finish playing. */
   if(playWav1.isPlaying()){
     while (playWav1.isPlaying()) {
-      /*The rest of the code will execute here while the file plays*/
+    /*The rest of the code will execute here while the file plays*/
     readGyro();
     readVol();
     setTimeline();
@@ -192,7 +193,9 @@ void game() {
   } else if (state==2){
     cruising();
   } else if (state==3){
-    resetGame();  
+    fadeOut();  
+  } else if (state==4){
+    resetGame();
   }
 };
 
@@ -210,8 +213,10 @@ void setTimeline(){
     state=1;
   }else if (timeline< cruiseEnd) {//batteries charged
     state=2;
-  } else if (timeline>= cruiseEnd) {//end & reset
+  } else if (timeline< outroEnd) {//end & reset
     state=3;
+  } else if (timeline>= outroEnd){
+    state=4;
   }
   #ifdef DbgTIMELINE
   Serial.print("timeline: ");
@@ -273,8 +278,18 @@ void readVol(){
   float vol= analogRead(VOL_PIN);
   vol=map(vol,0,1023,0,1);
   synth.setParamValue("masterVol", vol);
+  mixerRight.gain(1, vol*wavVol);
 //  Serial.println(vol);
   }
+
+void fadeOut(){
+  float fade = map(float(timeline), float(cruiseEnd), float(cruiseEnd+30000), 1.0,0.0);
+  fade = constrain(fade, 0.0,1.0);
+  Serial.print("FADE.  ");
+  Serial.println(fade);
+  mixerLeft.gain(0, 0.35*fade);
+  mixerRight.gain(0, fade);
+}
 
 //__________________________________________________________________GAME FUNCTIONS
 void collecting(){
@@ -614,7 +629,7 @@ void resetGame(){
     float fadeOutVol;
     fadeOutVol = 1 - (i*0.001);
     synth.setParamValue("masterVol", fadeOutVol);
-    delay(10); 
+    delay(5); 
   }
   
   for(int i=0; i< strip.numPixels(); i++) {
